@@ -1,0 +1,139 @@
+{ 
+  "AWSTemplateFormatVersion":"2010-09-09",
+  "Description":"AWS SERVERLESS CloudFormation Template.",
+  "Parameters": {
+        
+        "lambdaArn1" : {
+            "Description" : "Lambda Function ARN",
+            "Type" : "String"
+        },
+        "S3BucketLambda": {
+            "Type": "String"
+        }
+    },
+  "Resources": {
+    "lambdaArn": {
+        "Type": "AWS::Lambda::Function",
+        "DependsOn": "myLambdaRole",
+        "Properties": {
+          "FunctionName": "lambdaArn",
+          "Handler": "index.handler",
+          "Role": { "Fn::GetAtt" : ["myLambdaRole", "Arn"] },
+          "Code": {
+            "S3Bucket": {
+                   "Ref": "S3BucketLambda"
+                 },
+            "S3Key": "index.js.zip"
+          },
+          "Runtime": "nodejs8.10",
+          "Timeout": 25
+        }
+
+        },
+    "SNSservice":{
+              "Type":"AWS::SNS::Topic",
+              "Properties":{
+                "TopicName":"PWDRESET",
+                "Subscription":[
+                  {
+                    "Endpoint":{"Fn::GetAtt" : ["lambdaArn", "Arn"] }, "Protocol":"lambda"
+                  }
+                ]
+              }
+        },
+
+        "SNStopicpolicy":{
+            "Type" : "AWS::SNS::TopicPolicy",
+            "Properties" :
+              {
+                "PolicyDocument" : {
+                    "Version": "2008-10-17",
+                    "Id": "__default_policy_ID",
+                    "Statement": [
+                      {
+                        "Sid": "__default_statement_ID",
+                        "Effect": "Allow",
+                        "Principal": {
+                          "AWS": "*"
+                        },
+                        "Action": [
+                          "SNS:Publish",
+                          "SNS:DeleteTopic",
+                          "SNS:ListSubscriptionsByTopic",
+                          "SNS:GetTopicAttributes",
+                          "SNS:Receive",
+                          "SNS:AddPermission",
+                          "SNS:Subscribe"
+                        ],
+                        "Resource": {"Ref": "SNSservice"},
+                        "Condition": {
+                          "StringEquals": {
+                            "AWS:SourceOwner": {
+                                "Ref": "AWS::AccountId"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "Sid": "__console_pub_0",
+                        "Effect": "Allow",
+                        "Principal": {
+                          "AWS": "*"
+                        },
+                        "Action": "SNS:Publish",
+                        "Resource": {"Ref": "SNSservice"}
+                      },
+                      {
+                        "Sid": "__console_sub_0",
+                        "Effect": "Allow",
+                        "Principal": {
+                          "AWS": "*"
+                        },
+                        "Action": [
+                          "SNS:Subscribe",
+                          "SNS:Receive"
+                        ],
+                        "Resource": {"Ref": "SNSservice"}
+                      }
+                    ]
+                  },
+                "Topics" : [ {"Ref": "SNSservice"} ]
+              }
+          },
+
+       
+        "LambdaInvokePermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+              "Action": "lambda:InvokeFunction",
+              "Principal": "sns.amazonaws.com",
+              "SourceArn": {"Ref": "SNSservice"},
+              "FunctionName": {"Fn::GetAtt" : ["lambdaArn", "Arn"] }
+            }
+        },
+        
+        "myLambdaRole":
+        {
+            "Type":"AWS::IAM::Role",
+            "Properties": {
+                "RoleName": "LambdaExecutionRole",
+                "AssumeRolePolicyDocument": {
+
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": ["lambda.amazonaws.com"]
+                        },
+                        "Action": ["sts:AssumeRole"]
+                    }]
+                },
+                "ManagedPolicyArns":["arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+                "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess","arn:aws:iam::aws:policy/AmazonSESFullAccess",
+                "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess","arn:aws:iam::aws:policy/AmazonS3FullAccess"]
+            }
+        }
+  
+  }
+}
+
